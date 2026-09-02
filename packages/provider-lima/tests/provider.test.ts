@@ -80,6 +80,10 @@ function asCaptured(value: unknown): CapturedProviderConfig {
   return value as CapturedProviderConfig;
 }
 
+function startCommands(runtime: FakeRuntime) {
+  return runtime.commands.filter((call) => call.args[0] === "start");
+}
+
 describe("lima provider lifecycle", () => {
   beforeEach(() => vi.restoreAllMocks());
 
@@ -110,6 +114,69 @@ describe("lima provider lifecycle", () => {
     expect(setup?.options?.stdin).toContain("API_TOKEN='secret-value'");
     expect(handle.worktreePath).toBe("/tmp/agent-lane/workspace");
     await handle.close();
+  });
+
+  it("queues a third create until an earlier handle closes", async () => {
+    const runtime = new FakeRuntime();
+    const provider = asCaptured(lima({ runtime }));
+    const first = await provider.create({ env: {} });
+    const second = await provider.create({ env: {} });
+
+    const thirdPromise = provider.create({ env: {} });
+    await Promise.resolve();
+
+    expect(startCommands(runtime)).toHaveLength(2);
+
+    await first.close();
+    const third = await thirdPromise;
+    expect(startCommands(runtime)).toHaveLength(3);
+
+    await Promise.all([second.close(), third.close()]);
+  });
+
+  it("reuses released admission slots", async () => {
+    const runtime = new FakeRuntime();
+    const provider = asCaptured(lima({ runtime, maxConcurrentVms: 1 }));
+
+    for (let index = 0; index < 3; index += 1) {
+      const handle = await provider.create({ env: {} });
+      await handle.close();
+    }
+
+    expect(startCommands(runtime)).toHaveLength(3);
+  });
+
+  it("releases an admission slot when close fails", async () => {
+    const runtime = new FakeRuntime();
+    const provider = asCaptured(lima({ runtime, maxConcurrentVms: 1 }));
+    const first = await provider.create({ env: {} });
+    runtime.failCommand = 4;
+
+    await expect(first.close()).rejects.toThrow(/Failed to delete Lima VM/);
+    runtime.failCommand = -1;
+
+    const second = await provider.create({ env: {} });
+    await second.close();
+  });
+
+  it("releases an admission slot when create fails", async () => {
+    const runtime = new FakeRuntime();
+    const provider = asCaptured(lima({ runtime, maxConcurrentVms: 1 }));
+    runtime.failCommand = 2;
+
+    await expect(provider.create({ env: {} })).rejects.toThrow(
+      /Initialize guest workspace failed/,
+    );
+    runtime.failCommand = -1;
+
+    const handle = await provider.create({ env: {} });
+    await handle.close();
+  });
+
+  it("rejects a zero maxConcurrentVms option", () => {
+    expect(() => lima({ maxConcurrentVms: 0 })).toThrow(
+      /maxConcurrentVms must be an integer between 1 and 32/,
+    );
   });
 
   it("preserves command text and stdin inside the guest shell invocation", async () => {

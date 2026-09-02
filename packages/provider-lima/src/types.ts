@@ -10,6 +10,8 @@ export interface LimaProviderOptions {
   readonly timeoutMinutes?: number;
   /** Maximum number of bytes accepted from a single copyFileOut operation. */
   readonly maxCopyOutBytes?: number;
+  /** Maximum number of live Lima VMs admitted by this provider instance. */
+  readonly maxConcurrentVms?: number;
   /** Guest path populated by Sandcastle through copyIn. */
   readonly workspacePath?: string;
   /** Provider-level environment merged with Sandcastle's environment. */
