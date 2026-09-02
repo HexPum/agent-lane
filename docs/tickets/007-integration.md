@@ -1,6 +1,6 @@
 # Ticket 007: opt-in integration suite
 
-Spec: item 7. Blocked by: 005 (registry), 003 (admission). Tier: frontier.
+Spec: item 7. Blocked by: 005 (registry), 003 (admission). Model tier: unverified (frontier-candidate).
 
 ## Problem
 The POC checklist is manual; nothing automates it on real machines.

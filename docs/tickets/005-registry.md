@@ -1,6 +1,6 @@
 # Ticket 005: persistent registry and reaper
 
-Spec: item 1. ADR: 001. Blocked by: none. Tier: frontier.
+Spec: item 1. ADR: 001. Blocked by: none. Model tier: unverified (frontier-candidate).
 
 ## Problem
 Crashed owner processes and exhausted cleanup retries leak VMs with no trace.

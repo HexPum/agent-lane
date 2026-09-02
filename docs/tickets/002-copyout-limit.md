@@ -1,6 +1,6 @@
 # Ticket 002: configurable copy-out ceiling
 
-Spec: item 3. ADR: 003. Blocked by: none. Tier: flash.
+Spec: item 3. ADR: 003. Blocked by: none. Model tier: unverified (flash-candidate).
 
 ## Problem
 `copyFileOut` hardcodes `256 * 1024 * 1024` in the `capture` call.

@@ -1,6 +1,8 @@
 # ADR 001: Persistent registry and host-wide reaper
 
-Status: accepted (2026-09-02)
+Status: proposed (2026-09-02)
+> Rev note: decision delegated by the agent without a grill interview;
+> user interview pending.
 
 ## Context
 
