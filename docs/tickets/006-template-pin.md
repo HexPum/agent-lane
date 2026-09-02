@@ -1,6 +1,6 @@
 # Ticket 006: pin and verify guest provisioning
 
-Spec: item 5. ADR: 005. Blocked by: none. Model tier: unverified (frontier-candidate).
+Spec: item 5. ADR: 005. Blocked by: none. Tier: frontier.
 
 ## Problem
 `curl -fsSL https://claude.ai/install.sh | bash` is unpinned and unverified.

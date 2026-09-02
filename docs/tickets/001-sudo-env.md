@@ -1,7 +1,7 @@
 # Ticket 001: sudo preserves task environment
 
 Spec: docs/specs/production-ready.md (item 2). ADR: 002.
-Blocked by: none. Model tier: unverified (flash-candidate).
+Blocked by: none. Tier: flash.
 
 ## Problem
 `exec` with `execOptions.sudo` builds `sudo -- bash -lc <cmd>`. sudo's

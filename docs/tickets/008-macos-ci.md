@@ -1,6 +1,6 @@
 # Ticket 008: Apple Silicon macOS CI job
 
-Spec: item 8. Blocked by: 007. Model tier: unverified (flash-candidate).
+Spec: item 8. Blocked by: 007. Tier: flash.
 
 ## Problem
 CI runs unit tests on Linux only; the real stack (lima + Apple Virtualization)

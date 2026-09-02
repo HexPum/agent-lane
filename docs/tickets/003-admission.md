@@ -1,6 +1,6 @@
 # Ticket 003: maxConcurrentVms admission control
 
-Spec: item 4. ADR: 004. Blocked by: none. Model tier: unverified (flash-candidate).
+Spec: item 4. ADR: 004. Blocked by: none. Tier: flash.
 
 ## Problem
 Nothing bounds concurrent VMs per provider instance.

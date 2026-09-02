@@ -1,6 +1,6 @@
 # Ticket 004: fail fast on unsupported Lima
 
-Spec: item 6. ADR: 006. Blocked by: none. Model tier: unverified (flash-candidate).
+Spec: item 6. ADR: 006. Blocked by: none. Tier: flash.
 
 ## Problem
 Lima 1.x hosts fail inside `limactl start` with a cryptic error (`--mount-none`
