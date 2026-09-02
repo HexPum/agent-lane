@@ -24,6 +24,7 @@ const DEFAULTS = {
   memoryGiB: 8,
   diskGiB: 30,
   timeoutMinutes: 60,
+  maxConcurrentVms: 2,
   workspacePath: "/tmp/agent-lane/workspace",
 } as const;
 
@@ -98,10 +99,12 @@ function createHandle(options: {
   envPath: string;
   runtime: LimaRuntime;
   timeoutMs: number;
+  onCloseSettled: () => void;
 }): IsolatedSandboxHandle {
   let closePromise: Promise<void> | undefined;
   let cleanupFailures = 0;
-  const { name, workspacePath, envPath, runtime, timeoutMs } = options;
+  const { name, workspacePath, envPath, runtime, timeoutMs, onCloseSettled } =
+    options;
   let timeout: ReturnType<typeof setTimeout>;
 
   const scheduleClose = (delayMs: number) => {
@@ -119,6 +122,7 @@ function createHandle(options: {
       clearTimeout(timeout);
       const attempt = destroy(runtime, name);
       closePromise = attempt;
+      void attempt.finally(onCloseSettled).catch(() => undefined);
       void attempt.then(
         () => {
           cleanupFailures = 0;
@@ -248,16 +252,41 @@ export function lima(options: LimaProviderOptions = {}) {
     "timeoutMinutes",
     1440,
   );
+  const maxConcurrentVms = positiveInteger(
+    options.maxConcurrentVms ?? DEFAULTS.maxConcurrentVms,
+    "maxConcurrentVms",
+    32,
+  );
   const workspacePath = options.workspacePath ?? DEFAULTS.workspacePath;
   assertAbsoluteGuestPath(workspacePath, "workspacePath");
   assertEnvironment(options.env ?? {});
   const runtime = options.runtime ?? nodeRuntime();
+  let availableSlots = maxConcurrentVms;
+  const queuedCreates: Array<() => void> = [];
+
+  const acquireSlot = async (): Promise<() => void> => {
+    if (availableSlots === 0) {
+      await new Promise<void>((resolve) => queuedCreates.push(resolve));
+    } else {
+      availableSlots -= 1;
+    }
+
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const next = queuedCreates.shift();
+      if (next) next();
+      else availableSlots += 1;
+    };
+  };
 
   return createIsolatedSandboxProvider({
     name: "lima",
     env: { ...options.env },
     async create({ env }) {
       assertEnvironment(env);
+      const releaseSlot = await acquireSlot();
       const name = generateVmName();
       assertVmName(name);
       const envPath = "/tmp/agent-lane.env";
@@ -289,12 +318,14 @@ export function lima(options: LimaProviderOptions = {}) {
           envPath,
           runtime,
           timeoutMs: timeoutMinutes * 60_000,
+          onCloseSettled: releaseSlot,
         });
       } catch (error) {
         // `limactl start` can create an instance and still return non-zero.
         // Always target this generated name during rollback; destroy is
         // intentionally best-effort and never broadens to list/glob cleanup.
         await destroy(runtime, name).catch(() => undefined);
+        releaseSlot();
         throw error;
       }
     },
