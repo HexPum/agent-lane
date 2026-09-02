@@ -15,3 +15,13 @@ bug.
 - Run `npm run check` before committing.
 - Do not claim complete containment until the real-machine adversarial checks
   in `docs/POC.md` pass on each supported Lima/macOS version.
+
+## Workflow
+
+- Work exactly one ticket per session. Read `docs/tickets/<ticket>.md` and
+  `docs/specs/production-ready.md` first.
+- Implement test-first at the seams the ticket names.
+- Run `npm run check` before every commit.
+- Never commit without a passing code review against the spec and the rules in
+  this file.
+- Update the Orca worktree comment at every meaningful checkpoint.
