@@ -1,8 +1,6 @@
 # ADR 002: Preserve task environment under sudo
 
-Status: proposed (2026-09-02)
-> Rev note: decision delegated by the agent without a grill interview;
-> user interview pending.
+Status: accepted (2026-09-02)
 
 ## Context
 
