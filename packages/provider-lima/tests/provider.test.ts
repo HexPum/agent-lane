@@ -204,7 +204,8 @@ describe("lima provider lifecycle", () => {
     const runtime = new FakeRuntime();
     const provider = asCaptured(lima({ runtime, maxConcurrentVms: 1 }));
     const first = await provider.create({ env: {} });
-    runtime.failCommand = 4;
+    // Index 5 = delete on close (1 = version probe since ticket 004)
+    runtime.failCommand = 5;
 
     await expect(first.close()).rejects.toThrow(/Failed to delete Lima VM/);
     runtime.failCommand = -1;
@@ -216,7 +217,8 @@ describe("lima provider lifecycle", () => {
   it("releases an admission slot when create fails", async () => {
     const runtime = new FakeRuntime();
     const provider = asCaptured(lima({ runtime, maxConcurrentVms: 1 }));
-    runtime.failCommand = 2;
+    // Index 3 = workspace init (1 = version probe, 2 = VM start since ticket 004)
+    runtime.failCommand = 3;
 
     await expect(provider.create({ env: {} })).rejects.toThrow(
       /Initialize guest workspace failed/,
@@ -259,9 +261,10 @@ describe("lima provider lifecycle", () => {
 
     await handle.exec("whoami", { sudo: true });
 
-    expect(runtime.commands[2]?.args.join(" ")).toContain(
-      "sudo --preserve-env --",
+    const elevated = runtime.commands.find((call) =>
+      call.args.join(" ").includes("whoami"),
     );
+    expect(elevated?.args.join(" ")).toContain("sudo --preserve-env --");
     await handle.close();
   });
 

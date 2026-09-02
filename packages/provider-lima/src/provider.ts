@@ -102,16 +102,19 @@ function createHandle(options: {
   runtime: LimaRuntime;
   timeoutMs: number;
   maxCopyOutBytes: number;
-}): IsolatedSandboxHandle {
-  let closePromise: Promise<void> | undefined;
-  let cleanupFailures = 0;
-  const { name, workspacePath, envPath, runtime, timeoutMs, maxCopyOutBytes } =
   onCloseSettled: () => void;
 }): IsolatedSandboxHandle {
   let closePromise: Promise<void> | undefined;
   let cleanupFailures = 0;
-  const { name, workspacePath, envPath, runtime, timeoutMs, onCloseSettled } =
-    options;
+  const {
+    name,
+    workspacePath,
+    envPath,
+    runtime,
+    timeoutMs,
+    maxCopyOutBytes,
+    onCloseSettled,
+  } = options;
   let timeout: ReturnType<typeof setTimeout>;
 
   const scheduleClose = (delayMs: number) => {
@@ -263,6 +266,7 @@ export function lima(options: LimaProviderOptions = {}) {
     options.maxCopyOutBytes ?? DEFAULTS.maxCopyOutBytes,
     "maxCopyOutBytes",
     4 * 1024 ** 3,
+  );
   const maxConcurrentVms = positiveInteger(
     options.maxConcurrentVms ?? DEFAULTS.maxConcurrentVms,
     "maxConcurrentVms",
