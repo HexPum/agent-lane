@@ -145,7 +145,7 @@ function createHandle(options: {
       const cwd = execOptions.cwd ?? workspacePath;
       assertAbsoluteGuestPath(cwd, "exec cwd");
       const elevated = execOptions.sudo
-        ? `sudo -- bash -lc ${shellQuote(command)}`
+        ? `sudo --preserve-env -- bash -lc ${shellQuote(command)}`
         : command;
       const script =
         `export PATH="$HOME/.local/bin:$PATH"; ` +

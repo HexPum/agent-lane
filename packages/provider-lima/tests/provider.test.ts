@@ -116,6 +116,19 @@ describe("lima provider lifecycle", () => {
     await handle.close();
   });
 
+  it("preserves the task environment for elevated commands", async () => {
+    const runtime = new FakeRuntime();
+    const provider = asCaptured(lima({ runtime }));
+    const handle = await provider.create({ env: { TASK_TOKEN: "secret" } });
+
+    await handle.exec("whoami", { sudo: true });
+
+    expect(runtime.commands[2]?.args.join(" ")).toContain(
+      "sudo --preserve-env --",
+    );
+    await handle.close();
+  });
+
   it("rolls back its exact generated VM after partial creation failure", async () => {
     const runtime = new FakeRuntime();
     runtime.failCommand = 2;
