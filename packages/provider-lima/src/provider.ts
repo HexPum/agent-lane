@@ -353,18 +353,17 @@ export function lima(options: LimaProviderOptions = {}) {
           workspacePath,
           envPath,
           runtime,
-          timeoutMs: timeoutMinutes * 60_000,
-          maxCopyOutBytes,
-          onCloseSettled: releaseSlot,          registry,
-          timeoutMs: Math.max(0, expiresAt - Date.now()),        });
-      } catch (error) {
-        // `limactl start` can create an instance and still return non-zero.
-        // Always target this generated name during rollback; destroy is
-        // intentionally best-effort and never broadens to list/glob cleanup.
           registry,
           timeoutMs: timeoutMinutes * 60_000,
           maxCopyOutBytes,
           onCloseSettled: releaseSlot,
+        });
+      } catch (error) {
+        // `limactl start` can create an instance and still return non-zero.
+        // Always target this generated name during rollback; destroy is
+        // intentionally best-effort and never broadens to list/glob cleanup.
+        await destroy(runtime, registry, name).catch(() => undefined);
+        releaseSlot();
         throw error;
       }
     },
