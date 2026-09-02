@@ -1,0 +1,50 @@
+{
+  "name": "@agent-lane/provider-lima",
+  "version": "0.1.0",
+  "description": "Disposable Lima VM provider for Sandcastle coding agents",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "sandcastle",
+    "lima",
+    "sandbox",
+    "coding-agent",
+    "microvm"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HexPum/agent-lane.git",
+    "directory": "packages/provider-lima"
+  },
+  "peerDependencies": {
+    "@ai-hero/sandcastle": ">=0.12.0 <0.13.0"
+  },
+  "devDependencies": {
+    "@ai-hero/sandcastle": "0.12.0"
+  }
+}

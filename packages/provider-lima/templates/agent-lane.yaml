@@ -1,0 +1,45 @@
+# Agent Lane guest template. The provider also passes --mount-none.
+minimumLimaVersion: 2.0.0
+
+base: template:docker
+
+mounts: []
+
+cpus: 4
+memory: 8GiB
+disk: 30GiB
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      if ! command -v node >/dev/null 2>&1; then
+        apt-get update
+        apt-get install --no-install-recommends -y ca-certificates curl git jq
+        curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+        apt-get install --no-install-recommends -y nodejs
+        rm -rf /var/lib/apt/lists/*
+      fi
+      command -v codex >/dev/null 2>&1 || npm install --global @openai/codex@0.151.0
+      corepack enable
+  - mode: user
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      export PATH="$HOME/.local/bin:$PATH"
+      command -v claude >/dev/null 2>&1 && exit 0
+      curl -fsSL https://claude.ai/install.sh | bash
+
+probes:
+  - description: agent runtime is available
+    script: |
+      #!/bin/bash
+      set -eu
+      export PATH="$HOME/.local/bin:$PATH"
+      command -v git
+      command -v node
+      command -v npm
+      command -v docker
+      command -v claude
+      command -v codex
