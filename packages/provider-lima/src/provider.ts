@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createIsolatedSandboxProvider } from "@ai-hero/sandcastle";
 import type { ExecResult, IsolatedSandboxHandle } from "@ai-hero/sandcastle";
 
+import { checkLimaVersion } from "./limaVersion.js";
 import { nodeRuntime } from "./runtime.js";
 import type { LimaProviderOptions, LimaRuntime } from "./types.js";
 import {
@@ -290,6 +291,7 @@ export function lima(options: LimaProviderOptions = {}) {
       else availableSlots += 1;
     };
   };
+  let limaVersionCheck: Promise<void> | undefined;
 
   return createIsolatedSandboxProvider({
     name: "lima",
@@ -297,6 +299,8 @@ export function lima(options: LimaProviderOptions = {}) {
     async create({ env }) {
       assertEnvironment(env);
       const releaseSlot = await acquireSlot();
+      limaVersionCheck ??= checkLimaVersion(runtime);
+      await limaVersionCheck;
       const name = generateVmName();
       assertVmName(name);
       const envPath = "/tmp/agent-lane.env";
