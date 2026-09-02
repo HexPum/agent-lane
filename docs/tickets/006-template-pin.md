@@ -3,9 +3,11 @@
 Spec: item 5. ADR: 005. Blocked by: none. Tier: frontier.
 
 ## Problem
+
 `curl -fsSL https://claude.ai/install.sh | bash` is unpinned and unverified.
 
 ## Work
+
 1. In `templates/agent-lane.yaml` provision: download the installer to a temp
    file, verify SHA256 against a pinned hash constant, fail closed on mismatch,
    then execute. Pin the hash in the template with a comment on the bump
@@ -18,4 +20,5 @@ Spec: item 5. ADR: 005. Blocked by: none. Tier: frontier.
 4. `npm run check` green.
 
 ## Seams
+
 - Template provision script + a small provenance helper; no lifecycle changes.

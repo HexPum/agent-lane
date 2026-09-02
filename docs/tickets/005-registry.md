@@ -3,9 +3,11 @@
 Spec: item 1. ADR: 001. Blocked by: none. Tier: frontier.
 
 ## Problem
+
 Crashed owner processes and exhausted cleanup retries leak VMs with no trace.
 
 ## Work
+
 1. New module `src/registry.ts`: atomic read/write of
    `~/.agent-lane/registry.json` (temp file + rename). Record: vmName, ownerPid,
    createdAt, expiresAt, plus provenance fields from ticket 006 (optional).
@@ -21,4 +23,5 @@ Crashed owner processes and exhausted cleanup retries leak VMs with no trace.
 5. `npm run check` green.
 
 ## Seams
+
 - Registry is standalone; provider hooks are two calls in create/destroy.
