@@ -28,8 +28,15 @@ provision:
       #!/bin/bash
       set -eux -o pipefail
       export PATH="$HOME/.local/bin:$PATH"
-      command -v claude >/dev/null 2>&1 && exit 0
-      curl -fsSL https://claude.ai/install.sh | bash
+      # To bump: download and review the installer, run sha256sum on it,
+      # then update this hash in a reviewed PR.
+      CLAUDE_INSTALLER_SHA256="cde4f1702d3b1695f92b73d26888364e17bca476e17f0fd676484c951d36c125"
+      claude_installer="$(mktemp)"
+      trap 'rm -f "$claude_installer"' EXIT
+      curl --fail --silent --show-error --location --proto '=https' \
+        --output "$claude_installer" https://claude.ai/install.sh
+      printf '%s  %s\n' "$CLAUDE_INSTALLER_SHA256" "$claude_installer" | sha256sum --check --strict -
+      bash "$claude_installer"
 
 probes:
   - description: agent runtime is available
