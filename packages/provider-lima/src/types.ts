@@ -1,5 +1,7 @@
 import type { ExecResult, IsolatedSandboxProvider } from "@ai-hero/sandcastle";
 
+import type { LaneRegistry } from "./registry.js";
+
 export interface LimaProviderOptions {
   /** Lima template with Docker provisioned inside the guest. */
   readonly template?: string;
@@ -18,6 +20,8 @@ export interface LimaProviderOptions {
   readonly env?: Readonly<Record<string, string>>;
   /** Test seam; production callers should not set this. */
   readonly runtime?: LimaRuntime;
+  /** Test seam; production callers should use the persistent default registry. */
+  readonly registry?: LaneRegistry;
 }
 
 export interface LimaRuntime {

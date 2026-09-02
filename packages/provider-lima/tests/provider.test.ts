@@ -2,9 +2,15 @@ import type { ExecResult } from "@ai-hero/sandcastle";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CommandOptions, LimaRuntime, SpawnSpec } from "../src/types.js";
+import { createRegistry } from "../src/registry.js";
+import type {
+  CommandOptions,
+  LimaProviderOptions,
+  LimaRuntime,
+  SpawnSpec,
+} from "../src/types.js";
 
 interface CapturedProviderConfig {
   name: string;
@@ -25,6 +31,23 @@ vi.mock("@ai-hero/sandcastle", () => ({
 }));
 
 const { generateVmName, lima } = await import("../src/provider.js");
+const temporaryDirectories: string[] = [];
+
+async function temporaryRegistryPath(): Promise<string> {
+  const directory = await mkdtemp(
+    path.join(os.tmpdir(), "agent-lane-provider-test-"),
+  );
+  temporaryDirectories.push(directory);
+  return path.join(directory, "registry.json");
+}
+
+async function testProvider(
+  runtime: LimaRuntime,
+  options: Omit<LimaProviderOptions, "registry" | "runtime"> = {},
+): Promise<CapturedProviderConfig> {
+  const registry = createRegistry(await temporaryRegistryPath());
+  return asCaptured(lima({ ...options, runtime, registry }));
+}
 
 class FakeRuntime implements LimaRuntime {
   readonly commands: Array<{
@@ -89,7 +112,15 @@ function startCommands(runtime: FakeRuntime) {
 }
 
 describe("lima provider lifecycle", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  afterEach(async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    await Promise.all(
+      temporaryDirectories
+        .splice(0)
+        .map((directory) => rm(directory, { recursive: true, force: true })),
+    );
+  });
 
   it("checks the Lima version before creating its first VM", async () => {
     const runtime = new FakeRuntime();
@@ -152,7 +183,7 @@ describe("lima provider lifecycle", () => {
 
   it("starts with no mounts and never puts secrets in start arguments", async () => {
     const runtime = new FakeRuntime();
-    const provider = asCaptured(lima({ runtime, cpus: 6, memoryGiB: 12 }));
+    const provider = await testProvider(runtime, { cpus: 6, memoryGiB: 12 });
     const handle = await provider.create({
       env: { API_TOKEN: "secret-value" },
     });
@@ -237,7 +268,7 @@ describe("lima provider lifecycle", () => {
 
   it("preserves command text and stdin inside the guest shell invocation", async () => {
     const runtime = new FakeRuntime();
-    const provider = asCaptured(lima({ runtime }));
+    const provider = await testProvider(runtime);
     const handle = await provider.create({ env: {} });
     const stdin = "x".repeat(140_000);
     const command = "printf '%s' \"$HOME `not-host`\"";
@@ -316,7 +347,7 @@ describe("lima provider lifecycle", () => {
   it("rolls back its exact generated VM after partial creation failure", async () => {
     const runtime = new FakeRuntime();
     runtime.failCommand = 3;
-    const provider = asCaptured(lima({ runtime }));
+    const provider = await testProvider(runtime);
     await expect(provider.create({ env: {} })).rejects.toThrow(
       /Initialize guest workspace failed/,
     );
@@ -339,7 +370,7 @@ describe("lima provider lifecycle", () => {
 
   it("closes only its own VM and close is idempotent under concurrency", async () => {
     const runtime = new FakeRuntime();
-    const provider = asCaptured(lima({ runtime }));
+    const provider = await testProvider(runtime);
     const handle = await provider.create({ env: {} });
     await Promise.all([handle.close(), handle.close(), handle.close()]);
 
@@ -354,7 +385,7 @@ describe("lima provider lifecycle", () => {
 
   it("attempts delete even when stop throws", async () => {
     const runtime = new FakeRuntime();
-    const provider = asCaptured(lima({ runtime }));
+    const provider = await testProvider(runtime);
     const handle = await provider.create({ env: {} });
     runtime.throwCommand = 4;
     await handle.close();
@@ -363,7 +394,7 @@ describe("lima provider lifecycle", () => {
 
   it("rejects close when deletion cannot be confirmed", async () => {
     const runtime = new FakeRuntime();
-    const provider = asCaptured(lima({ runtime }));
+    const provider = await testProvider(runtime);
     const handle = await provider.create({ env: {} });
     runtime.failCommand = 5;
     await expect(handle.close()).rejects.toThrow(/Failed to delete Lima VM/);
@@ -375,7 +406,7 @@ describe("lima provider lifecycle", () => {
   it("automatically retries a failed delete for the same VM", async () => {
     vi.useFakeTimers();
     const runtime = new FakeRuntime();
-    const provider = asCaptured(lima({ runtime }));
+    const provider = await testProvider(runtime);
     const handle = await provider.create({ env: {} });
     runtime.failCommand = 5;
     await expect(handle.close()).rejects.toThrow(/Failed to delete Lima VM/);
@@ -388,7 +419,35 @@ describe("lima provider lifecycle", () => {
     );
     expect(deletes).toHaveLength(2);
     expect(new Set(deletes.map((call) => call.args.at(-1))).size).toBe(1);
-    vi.useRealTimers();
+  });
+
+  it("keeps the registry entry after cleanup retries are exhausted", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const registry = createRegistry(await temporaryRegistryPath());
+    const runtime = new FakeRuntime();
+    const originalCommand = runtime.command.bind(runtime);
+    runtime.command = async (...args) => {
+      const result = await originalCommand(...args);
+      if (args[1][0] === "delete") {
+        return { stdout: "", stderr: "still exists", exitCode: 9 };
+      }
+      return result;
+    };
+    const provider = asCaptured(lima({ runtime, registry }));
+    const handle = await provider.create({ env: {} });
+
+    await expect(handle.close()).rejects.toThrow(/Failed to delete Lima VM/);
+    await vi.advanceTimersByTimeAsync(5_000 + 10_000 + 15_000);
+
+    expect(
+      runtime.commands.filter((call) => call.args[0] === "delete"),
+    ).toHaveLength(4);
+    expect(await registry.list()).toEqual([
+      expect.objectContaining({
+        vmName: expect.stringMatching(/^agent-lane-/),
+      }),
+    ]);
   });
 
   it("treats an already absent VM as an idempotent successful close", async () => {
@@ -401,7 +460,7 @@ describe("lima provider lifecycle", () => {
       }
       return result;
     };
-    const provider = asCaptured(lima({ runtime }));
+    const provider = await testProvider(runtime);
     const handle = await provider.create({ env: {} });
     await expect(handle.close()).resolves.toBeUndefined();
   });
