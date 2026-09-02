@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { createIsolatedSandboxProvider } from "@ai-hero/sandcastle";
 import type { ExecResult, IsolatedSandboxHandle } from "@ai-hero/sandcastle";
 
+import { createRegistry } from "./registry.js";
+import type { LaneRegistry } from "./registry.js";
 import { nodeRuntime } from "./runtime.js";
 import type { LimaProviderOptions, LimaRuntime } from "./types.js";
 import {
@@ -57,7 +59,11 @@ function envFile(env: Readonly<Record<string, string>>): string {
     .join("\n");
 }
 
-async function destroy(runtime: LimaRuntime, name: string): Promise<void> {
+export async function destroy(
+  runtime: LimaRuntime,
+  registry: LaneRegistry,
+  name: string,
+): Promise<void> {
   assertVmName(name);
   let stopFailure: unknown;
   try {
@@ -85,6 +91,7 @@ async function destroy(runtime: LimaRuntime, name: string): Promise<void> {
       );
     }
   }
+  await registry.deregister(name);
 }
 
 function guestShellArgs(name: string, script: string): string[] {
@@ -97,11 +104,13 @@ function createHandle(options: {
   workspacePath: string;
   envPath: string;
   runtime: LimaRuntime;
+  registry: LaneRegistry;
   timeoutMs: number;
 }): IsolatedSandboxHandle {
   let closePromise: Promise<void> | undefined;
   let cleanupFailures = 0;
-  const { name, workspacePath, envPath, runtime, timeoutMs } = options;
+  const { name, workspacePath, envPath, runtime, registry, timeoutMs } =
+    options;
   let timeout: ReturnType<typeof setTimeout>;
 
   const scheduleClose = (delayMs: number) => {
@@ -117,7 +126,7 @@ function createHandle(options: {
   const close = () => {
     if (!closePromise) {
       clearTimeout(timeout);
-      const attempt = destroy(runtime, name);
+      const attempt = destroy(runtime, registry, name);
       closePromise = attempt;
       void attempt.then(
         () => {
@@ -252,6 +261,7 @@ export function lima(options: LimaProviderOptions = {}) {
   assertAbsoluteGuestPath(workspacePath, "workspacePath");
   assertEnvironment(options.env ?? {});
   const runtime = options.runtime ?? nodeRuntime();
+  const registry = options.registry ?? createRegistry();
 
   return createIsolatedSandboxProvider({
     name: "lima",
@@ -261,6 +271,14 @@ export function lima(options: LimaProviderOptions = {}) {
       const name = generateVmName();
       assertVmName(name);
       const envPath = "/tmp/agent-lane.env";
+      const createdAt = Date.now();
+      const expiresAt = createdAt + timeoutMinutes * 60_000;
+      await registry.register({
+        vmName: name,
+        ownerPid: process.pid,
+        createdAt: new Date(createdAt).toISOString(),
+        expiresAt: new Date(expiresAt).toISOString(),
+      });
       try {
         const startResult = await runtime.command("limactl", [
           "start",
@@ -288,13 +306,14 @@ export function lima(options: LimaProviderOptions = {}) {
           workspacePath,
           envPath,
           runtime,
-          timeoutMs: timeoutMinutes * 60_000,
+          registry,
+          timeoutMs: Math.max(0, expiresAt - Date.now()),
         });
       } catch (error) {
         // `limactl start` can create an instance and still return non-zero.
         // Always target this generated name during rollback; destroy is
         // intentionally best-effort and never broadens to list/glob cleanup.
-        await destroy(runtime, name).catch(() => undefined);
+        await destroy(runtime, registry, name).catch(() => undefined);
         throw error;
       }
     },

@@ -20,3 +20,14 @@ It provisions Node 22, Claude Code, and Codex, while the provider enforces
 
 The initial release targets Lima 2.x on Apple Silicon macOS. See the root
 `SECURITY.md` and `docs/POC.md` before using it for untrusted work.
+
+Every lane is recorded in `~/.agent-lane/registry.json` before Lima starts it.
+Run the idempotent reaper periodically (for example, from cron) to remove
+registered lanes after their expiry:
+
+```bash
+agent-lane reap
+```
+
+The command prints registered VM names and never discovers or deletes
+unregistered Lima instances.

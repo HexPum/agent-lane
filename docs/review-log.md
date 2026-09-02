@@ -2,8 +2,9 @@
 
 One line per code review: ticket, model tier, first-attempt PASS/FAIL, note.
 
-| Ticket | Tier | First attempt | Note |
-|---|---|---|---|
+| Ticket | Tier     | First attempt | Note                                                                                                  |
+| ------ | -------- | ------------- | ----------------------------------------------------------------------------------------------------- |
+| 005    | frontier | FAIL          | Final Standards + Spec PASS after fail-closed registry, lock, bin-symlink, and absolute-expiry fixes. |
 
 ## Rückbau (rollback guide)
 

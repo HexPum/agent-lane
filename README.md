@@ -15,9 +15,8 @@ missing local VM security boundary.
 ## Status
 
 The provider is an implementation-stage preview with unit-tested lifecycle and
-command construction. Real-machine validation and the persistent stale-VM
-reaper remain release blockers: run [`docs/POC.md`](docs/POC.md) before using it
-for untrusted work.
+command construction. Real-machine validation remains a release blocker: run
+[`docs/POC.md`](docs/POC.md) before using it for untrusted work.
 
 ## Security properties
 
@@ -30,6 +29,8 @@ for untrusted work.
   temporary file followed by an atomic rename.
 - VM names are generated and validated by Agent Lane; teardown targets that
   exact name and is idempotent.
+- Lanes are registered persistently before startup; `agent-lane reap` removes
+  only expired, registered, name-validated VMs after owner crashes.
 - The isolated provider exposes no host-mount option.
 - VM resources and, while the host runner lives, lifetime are bounded by
   configuration.
