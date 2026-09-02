@@ -48,4 +48,12 @@ export interface SpawnSpec {
   readonly args: readonly string[];
 }
 
+/** Auditable inputs used to provision one lane. Stored on its registry record. */
+export interface RunProvenance {
+  readonly limaVersion: string;
+  readonly templateSha256: string;
+  readonly codexVersion: string;
+  readonly claudeInstallerSha256: string;
+}
+
 export type LimaSandboxProvider = IsolatedSandboxProvider;
