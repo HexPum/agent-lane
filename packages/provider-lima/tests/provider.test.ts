@@ -48,7 +48,11 @@ class FakeRuntime implements LimaRuntime {
     if (this.commands.length === this.failCommand) {
       return { stdout: "", stderr: "injected failure", exitCode: 9 };
     }
-    return { stdout: "ok", stderr: "", exitCode: 0 };
+    return {
+      stdout: args[0] === "--version" ? "limactl version 2.1.0" : "ok",
+      stderr: "",
+      exitCode: 0,
+    };
   }
 
   async pipe(source: SpawnSpec, destination: SpawnSpec): Promise<ExecResult> {
@@ -68,6 +72,56 @@ function asCaptured(value: unknown): CapturedProviderConfig {
 describe("lima provider lifecycle", () => {
   beforeEach(() => vi.restoreAllMocks());
 
+  it("checks the Lima version before creating its first VM", async () => {
+    const runtime = new FakeRuntime();
+    runtime.command = async (executable, args, options) => {
+      runtime.commands.push({
+        executable,
+        args,
+        ...(options === undefined ? {} : { options }),
+      });
+      return {
+        stdout: args[0] === "--version" ? "limactl version 2.1.0" : "ok",
+        stderr: "",
+        exitCode: 0,
+      };
+    };
+    const provider = asCaptured(lima({ runtime }));
+
+    const handle = await provider.create({ env: {} });
+
+    expect(runtime.commands[0]).toMatchObject({
+      executable: "limactl",
+      args: ["--version"],
+    });
+    expect(runtime.commands[1]?.args[0]).toBe("start");
+    await handle.close();
+  });
+
+  it("memoizes a failed Lima version check for every create", async () => {
+    const runtime = new FakeRuntime();
+    runtime.command = async (executable, args, options) => {
+      runtime.commands.push({
+        executable,
+        args,
+        ...(options === undefined ? {} : { options }),
+      });
+      return { stdout: "1.3.15", stderr: "", exitCode: 0 };
+    };
+    const provider = asCaptured(lima({ runtime }));
+
+    await expect(provider.create({ env: {} })).rejects.toThrow(
+      /requires Lima 2\.x or newer/,
+    );
+    await expect(provider.create({ env: {} })).rejects.toThrow(
+      /requires Lima 2\.x or newer/,
+    );
+
+    expect(runtime.commands).toEqual([
+      { executable: "limactl", args: ["--version"] },
+    ]);
+  });
+
   it("generates unique deletion-safe VM names", () => {
     const names = new Set(Array.from({ length: 1_000 }, generateVmName));
     expect(names.size).toBe(1_000);
@@ -84,14 +138,14 @@ describe("lima provider lifecycle", () => {
       env: { API_TOKEN: "secret-value" },
     });
 
-    const start = runtime.commands[0];
+    const start = runtime.commands[1];
     expect(start?.executable).toBe("limactl");
     expect(start?.args).toContain("--mount-none");
     expect(start?.args).toContain("--cpus=6");
     expect(start?.args).toContain("--memory=12");
     expect(start?.args.join(" ")).not.toContain("secret-value");
 
-    const setup = runtime.commands[1];
+    const setup = runtime.commands[2];
     expect(setup?.options?.stdin).toContain("API_TOKEN='secret-value'");
     expect(handle.worktreePath).toBe("/tmp/agent-lane/workspace");
     await handle.close();
@@ -108,7 +162,7 @@ describe("lima provider lifecycle", () => {
       stdin,
     });
 
-    const call = runtime.commands[2];
+    const call = runtime.commands[3];
     expect(call?.executable).toBe("limactl");
     expect(call?.args.join(" ")).toContain("workspace with spaces");
     expect(call?.args.join(" ")).toContain("not-host");
@@ -118,13 +172,13 @@ describe("lima provider lifecycle", () => {
 
   it("rolls back its exact generated VM after partial creation failure", async () => {
     const runtime = new FakeRuntime();
-    runtime.failCommand = 2;
+    runtime.failCommand = 3;
     const provider = asCaptured(lima({ runtime }));
     await expect(provider.create({ env: {} })).rejects.toThrow(
       /Initialize guest workspace failed/,
     );
 
-    const startName = runtime.commands[0]?.args
+    const startName = runtime.commands[1]?.args
       .find((arg) => arg.startsWith("--name="))
       ?.slice("--name=".length);
     expect(startName).toMatch(/^agent-lane-/);
@@ -159,16 +213,16 @@ describe("lima provider lifecycle", () => {
     const runtime = new FakeRuntime();
     const provider = asCaptured(lima({ runtime }));
     const handle = await provider.create({ env: {} });
-    runtime.throwCommand = 3;
+    runtime.throwCommand = 4;
     await handle.close();
-    expect(runtime.commands[3]?.args[0]).toBe("delete");
+    expect(runtime.commands[4]?.args[0]).toBe("delete");
   });
 
   it("rejects close when deletion cannot be confirmed", async () => {
     const runtime = new FakeRuntime();
     const provider = asCaptured(lima({ runtime }));
     const handle = await provider.create({ env: {} });
-    runtime.failCommand = 4;
+    runtime.failCommand = 5;
     await expect(handle.close()).rejects.toThrow(/Failed to delete Lima VM/);
     runtime.failCommand = -1;
     await expect(handle.close()).resolves.toBeUndefined();
@@ -180,7 +234,7 @@ describe("lima provider lifecycle", () => {
     const runtime = new FakeRuntime();
     const provider = asCaptured(lima({ runtime }));
     const handle = await provider.create({ env: {} });
-    runtime.failCommand = 4;
+    runtime.failCommand = 5;
     await expect(handle.close()).rejects.toThrow(/Failed to delete Lima VM/);
 
     runtime.failCommand = -1;
@@ -199,7 +253,7 @@ describe("lima provider lifecycle", () => {
     const original = runtime.command.bind(runtime);
     runtime.command = async (...args) => {
       const result = await original(...args);
-      if (runtime.commands.length === 4) {
+      if (runtime.commands.length === 5) {
         return { stdout: "", stderr: "instance does not exist", exitCode: 1 };
       }
       return result;
