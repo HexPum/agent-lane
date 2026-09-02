@@ -24,6 +24,7 @@ const DEFAULTS = {
   memoryGiB: 8,
   diskGiB: 30,
   timeoutMinutes: 60,
+  maxCopyOutBytes: 256 * 1024 * 1024,
   workspacePath: "/tmp/agent-lane/workspace",
 } as const;
 
@@ -98,10 +99,12 @@ function createHandle(options: {
   envPath: string;
   runtime: LimaRuntime;
   timeoutMs: number;
+  maxCopyOutBytes: number;
 }): IsolatedSandboxHandle {
   let closePromise: Promise<void> | undefined;
   let cleanupFailures = 0;
-  const { name, workspacePath, envPath, runtime, timeoutMs } = options;
+  const { name, workspacePath, envPath, runtime, timeoutMs, maxCopyOutBytes } =
+    options;
   let timeout: ReturnType<typeof setTimeout>;
 
   const scheduleClose = (delayMs: number) => {
@@ -205,7 +208,7 @@ function createHandle(options: {
             ),
           },
           extracted,
-          256 * 1024 * 1024,
+          maxCopyOutBytes,
         );
         requireSuccess(result, `Copy out ${guestName}`);
         const stat = await lstat(extracted);
@@ -248,6 +251,11 @@ export function lima(options: LimaProviderOptions = {}) {
     "timeoutMinutes",
     1440,
   );
+  const maxCopyOutBytes = positiveInteger(
+    options.maxCopyOutBytes ?? DEFAULTS.maxCopyOutBytes,
+    "maxCopyOutBytes",
+    4 * 1024 ** 3,
+  );
   const workspacePath = options.workspacePath ?? DEFAULTS.workspacePath;
   assertAbsoluteGuestPath(workspacePath, "workspacePath");
   assertEnvironment(options.env ?? {});
@@ -289,6 +297,7 @@ export function lima(options: LimaProviderOptions = {}) {
           envPath,
           runtime,
           timeoutMs: timeoutMinutes * 60_000,
+          maxCopyOutBytes,
         });
       } catch (error) {
         // `limactl start` can create an instance and still return non-zero.

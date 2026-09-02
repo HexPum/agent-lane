@@ -1,4 +1,7 @@
 import type { ExecResult } from "@ai-hero/sandcastle";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CommandOptions, LimaRuntime, SpawnSpec } from "../src/types.js";
@@ -12,6 +15,7 @@ interface CapturedProviderConfig {
       command: string,
       options?: CommandOptions & { cwd?: string; sudo?: boolean },
     ): Promise<ExecResult>;
+    copyFileOut(sandboxPath: string, hostPath: string): Promise<void>;
     close(): Promise<void>;
   }>;
 }
@@ -29,6 +33,11 @@ class FakeRuntime implements LimaRuntime {
     options?: CommandOptions;
   }> = [];
   readonly pipes: Array<{ source: SpawnSpec; destination: SpawnSpec }> = [];
+  readonly captures: Array<{
+    source: SpawnSpec;
+    hostPath: string;
+    maxBytes: number;
+  }> = [];
   failCommand = -1;
   throwCommand = -1;
 
@@ -56,7 +65,13 @@ class FakeRuntime implements LimaRuntime {
     return { stdout: "", stderr: "", exitCode: 0 };
   }
 
-  async capture(): Promise<ExecResult> {
+  async capture(
+    source: SpawnSpec,
+    hostPath: string,
+    maxBytes: number,
+  ): Promise<ExecResult> {
+    this.captures.push({ source, hostPath, maxBytes });
+    await writeFile(hostPath, "captured");
     return { stdout: "", stderr: "", exitCode: 0 };
   }
 }
@@ -128,6 +143,51 @@ describe("lima provider lifecycle", () => {
     );
     await handle.close();
   });
+
+  it("limits copy-out to 256 MiB by default", async () => {
+    const runtime = new FakeRuntime();
+    const provider = asCaptured(lima({ runtime }));
+    const handle = await provider.create({ env: {} });
+    const directory = await mkdtemp(path.join(os.tmpdir(), "agent-lane-test-"));
+
+    try {
+      await handle.copyFileOut(
+        "/tmp/artifact.bin",
+        path.join(directory, "out.bin"),
+      );
+      expect(runtime.captures[0]?.maxBytes).toBe(268_435_456);
+    } finally {
+      await handle.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("applies a configured copy-out limit", async () => {
+    const runtime = new FakeRuntime();
+    const provider = asCaptured(lima({ runtime, maxCopyOutBytes: 1_048_576 }));
+    const handle = await provider.create({ env: {} });
+    const directory = await mkdtemp(path.join(os.tmpdir(), "agent-lane-test-"));
+
+    try {
+      await handle.copyFileOut(
+        "/tmp/artifact.bin",
+        path.join(directory, "out.bin"),
+      );
+      expect(runtime.captures[0]?.maxBytes).toBe(1_048_576);
+    } finally {
+      await handle.close();
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([0, -1, 4_294_967_297])(
+    "rejects invalid copy-out limit %s",
+    (maxCopyOutBytes) => {
+      expect(() => lima({ maxCopyOutBytes })).toThrow(
+        "maxCopyOutBytes must be an integer between 1 and 4294967296",
+      );
+    },
+  );
 
   it("rolls back its exact generated VM after partial creation failure", async () => {
     const runtime = new FakeRuntime();

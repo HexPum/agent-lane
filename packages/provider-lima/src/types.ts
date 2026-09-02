@@ -8,6 +8,8 @@ export interface LimaProviderOptions {
   readonly diskGiB?: number;
   /** Hard lifetime bound applied through a host-side timer. */
   readonly timeoutMinutes?: number;
+  /** Maximum number of bytes accepted from a single copyFileOut operation. */
+  readonly maxCopyOutBytes?: number;
   /** Guest path populated by Sandcastle through copyIn. */
   readonly workspacePath?: string;
   /** Provider-level environment merged with Sandcastle's environment. */
